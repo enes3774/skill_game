@@ -15,10 +15,44 @@ class SolanaService {
 
         const gameWalletAddress = process.env.GAME_WALLET_ADDRESS;
         if (!gameWalletAddress) {
-            throw new Error('GAME_WALLET_ADDRESS must be set');
+            throw new Error('GAME_WALLET_ADDRESS must be set in .env file');
         }
 
-        this.gameWallet = new PublicKey(gameWalletAddress);
+        // Validate wallet address format
+        if (gameWalletAddress.includes('your_') || gameWalletAddress.length < 32) {
+            console.error('');
+            console.error('❌ INVALID GAME_WALLET_ADDRESS in .env file');
+            console.error('');
+            console.error('You need to set a valid Solana wallet address.');
+            console.error('');
+            console.error('To create a new wallet:');
+            console.error('  1. Install Solana CLI: https://docs.solana.com/cli/install-solana-cli-tools');
+            console.error('  2. Run: solana-keygen new');
+            console.error('  3. Copy the public key to GAME_WALLET_ADDRESS in .env');
+            console.error('');
+            console.error('OR use an existing wallet address (44 characters, base58 format)');
+            console.error('Example: 7rQ9fDqBjEpvYkKwKM2NxBx9Zx9Z9Z9Z9Z9Z9Z9Z9Z9Z');
+            console.error('');
+            throw new Error('Invalid GAME_WALLET_ADDRESS - must be a valid Solana public key');
+        }
+
+        try {
+            this.gameWallet = new PublicKey(gameWalletAddress);
+        } catch (error) {
+            console.error('');
+            console.error('❌ INVALID GAME_WALLET_ADDRESS format');
+            console.error('');
+            console.error(`Error: ${error.message}`);
+            console.error(`Value provided: ${gameWalletAddress}`);
+            console.error('');
+            console.error('A valid Solana public key should be:');
+            console.error('  - 32-44 characters long');
+            console.error('  - Base58 encoded (characters: 1-9, A-H, J-N, P-Z, a-k, m-z)');
+            console.error('  - Example: 7rQ9fDqBjEpvYkKwKM2NxBx9Zx9Z9Z9Z9Z9Z9Z9Z9Z9Z');
+            console.error('');
+            throw new Error('Invalid GAME_WALLET_ADDRESS format');
+        }
+
         this.processedSignatures = new Set();
 
         console.log(`Solana service initialized`);
